@@ -23,4 +23,9 @@
 /* avro tests. */
 #cmakedefine HAVE_avro_array_get
 
+/* timer. */
+#cmakedefine HAVE_CLOCK_GETTIME
+#cmakedefine HAVE_GTIMER
+#cmakedefine HAVE_GETTIMEOFDAY
+
 #endif /* __CONFIG_H__ */

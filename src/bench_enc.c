@@ -9,12 +9,9 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #include <sys/user.h>
-#include <glib.h>
 #include "bench_enc.h"
 
 #include "protobuf.h"
-
-#define MEMORY_PROFILE 0
 
 #define MAX_BUFFER_SIZE 128 * 1024
 
@@ -26,8 +23,89 @@ static int loop_multipler = 100;
 #define LOOP_ROUND_TRIP    (20 * loop_multipler)
 #define LOOP_CREATE        (2000)
 
+/* microseconds per millisecond */
+#define USEC_PER_MSEC       1000ULL
+/* microseconds per second */
+#define USEC_PER_SEC     1000000ULL
+/* nanoseconds per microsecond */
+#define NSEC_PER_USEC       1000ULL
+/* nanoseconds per millisecond */
+#define NSEC_PER_MSEC    1000000ULL
+/* nanoseconds per second */
+#define NSEC_PER_SEC  1000000000ULL
+
+#ifdef HAVE_CLOCK_GETTIME
+#include <time.h>
+#include <stdio.h>
+#include <errno.h>
+struct BTimer {
+	double start;
+	double end;
+};
+typedef struct BTimer *BTimer;
+
+static inline double get_time_secs() {
+  struct timespec tp;
+  if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&tp) != 0) {
+    perror("clock_gettime");
+    return -1.0;
+  }
+  return (((double)tp.tv_nsec / NSEC_PER_SEC) + (tp.tv_sec));
+}
+#define btimer_new() (BTimer)calloc(1, sizeof(struct BTimer));
+#define btimer_free(timer) free(timer);
+#define btimer_start(timer) (timer)->start = get_time_secs()
+#define btimer_stop(timer) (timer)->end = get_time_secs()
+#define btimer_elapsed(timer) ((timer)->end - (timer)->start)
+#else /* ifdef HAVE_CLOCK_GETTIME. */
+
+#ifdef HAVE_GTIMER
+#include <glib.h>
+typedef GTimer *BTimer;
+#define btimer_new() g_timer_new()
+#define btimer_free(timer) g_timer_destroy(timer)
+#define btimer_start(timer) g_timer_start(timer)
+#define btimer_stop(timer) g_timer_stop(timer)
+#define btimer_elapsed(timer) g_timer_elapsed(timer)
+#else /* ifdef HAVE_GTIMER. */
+
+#ifdef HAVE_GETTIMEOFDAY
+#include <sys/time.h>
+#include <stdio.h>
+#include <errno.h>
+struct BTimer {
+	double start;
+	double end;
+};
+typedef struct BTimer *BTimer;
+
+static inline double get_time_secs() {
+  struct timeval tv;
+  if(gettimeofday(&tv, NULL) != 0) {
+    perror("gettimeofday");
+    return -1.0;
+  }
+  return (((double)tv.tv_usec / USEC_PER_SEC) + (tv.tv_sec));
+}
+#define btimer_new() (BTimer)calloc(1, sizeof(struct BTimer));
+#define btimer_free(timer) free(timer);
+#define btimer_start(timer) (timer)->start = get_time_secs()
+#define btimer_stop(timer) (timer)->end = get_time_secs()
+#define btimer_elapsed(timer) ((timer)->end - (timer)->start)
+#else /* ifdef HAVE_GETTIMEOFDAY. */
+
+typedef void *BTimer;
+#define btimer_new() NULL
+#define btimer_free(timer)
+#define btimer_start(timer)
+#define btimer_stop(timer)
+#define btimer_elapsed(timer) 1
+#endif
+#endif
+#endif
+
 typedef struct BenchEnc {
-	GTimer       *timer;
+	BTimer       timer;
 	char         *buffer;
 	size_t       len;
 	BenchEncInfo *info;
@@ -43,7 +121,7 @@ static BenchEnc *bench_enc_new(BenchEncInfo *info) {
 	bench->len = MAX_BUFFER_SIZE;
 
 	/* create timer. */
-	bench->timer = g_timer_new();
+	bench->timer = btimer_new();
 
 	/* init. bench state. */
 	bench->state = info->init(bench->buffer, bench->len);
@@ -53,7 +131,7 @@ static BenchEnc *bench_enc_new(BenchEncInfo *info) {
 
 static void bench_enc_free(BenchEnc *bench) {
 	if(bench->timer) {
-		g_timer_destroy(bench->timer);
+		btimer_free(bench->timer);
 		bench->timer = NULL;
 	}
 	/* cleanup bench state. */
@@ -82,9 +160,9 @@ BenchEncInfo *bench_enc_get_next(BenchEncInfo *info) {
 	return info->next;
 }
 
-static void print_bench_stat(const char *action, const char *name, GTimer *timer, uint32_t count) {
+static void print_bench_stat(const char *action, const char *name, BTimer timer, uint32_t count) {
 	double secs;
-	secs = g_timer_elapsed(timer, NULL);
+	secs = btimer_elapsed(timer);
 	printf("%s: %s: %d at %1.0f per second\n", name, action, count,
 		(double)(count / secs));
 	printf("%s: %3.3f usecs\n", name, ((double)((secs * 1000000) / count)));
@@ -92,43 +170,43 @@ static void print_bench_stat(const char *action, const char *name, GTimer *timer
 }
 
 static double bench_create_empty_objects(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	void         *obj = NULL;
 	uint32_t     n;
 
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->create();
 		info->free(obj);
 	}
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	print_bench_stat("create & delete empty object", info->name, timer, count);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static double bench_create_full_objects(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	void         *obj = NULL;
 	uint32_t     n;
 
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->build(NULL);
 		info->free(obj);
 	}
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	print_bench_stat("create & delete full object", info->name, timer, count);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static double bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
 	size_t       buflen = bench->len;
@@ -138,21 +216,21 @@ static double bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
 	uint32_t     n;
 
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->build(NULL);
 		len = info->encode(state, obj, buffer, buflen);
 		info->free(obj);
 	}
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	printf("obj encode len = %zu\n", len);
 	print_bench_stat("encode different objects", info->name, timer, count);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static double bench_encode_same_object(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
 	size_t       buflen = bench->len;
@@ -163,20 +241,20 @@ static double bench_encode_same_object(BenchEnc *bench, uint32_t count) {
 
 	obj = info->build(NULL);
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		len = info->encode(state, obj, buffer, buflen);
 	}
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	printf("obj encode len = %zu\n", len);
 	print_bench_stat("encode same object", info->name, timer, count);
 	info->free(obj);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static double bench_decode_object(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
 	size_t       buflen = bench->len;
@@ -192,19 +270,19 @@ static double bench_decode_object(BenchEnc *bench, uint32_t count) {
 	printf("obj len = %zu\n", len);
 
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->decode(state, NULL, buffer, len);
 		info->free(obj);
 	}
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	print_bench_stat("decode object", info->name, timer, count);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static double bench_decode_same_object(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
 	size_t       buflen = bench->len;
@@ -221,19 +299,19 @@ static double bench_decode_same_object(BenchEnc *bench, uint32_t count) {
 	printf("obj len = %zu\n", len);
 
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->decode(state, obj, buffer, len);
 	}
 	info->free(obj);
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	print_bench_stat("decode same object", info->name, timer, count);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static double bench_decode_object_check_all(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
 	size_t       buflen = bench->len;
@@ -249,20 +327,20 @@ static double bench_decode_object_check_all(BenchEnc *bench, uint32_t count) {
 	printf("obj len = %zu\n", len);
 
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->decode(state, NULL, buffer, len);
 		info->check_all(obj);
 		info->free(obj);
 	}
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	print_bench_stat("decode object & check all fields", info->name, timer, count);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static double bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
-	GTimer       *timer = bench->timer;
+	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
 	size_t       buflen = bench->len;
@@ -278,16 +356,16 @@ static double bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
 	printf("obj len = %zu\n", len);
 
 	/* start timer. */
-	g_timer_start(timer);
+	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->decode(state, NULL, buffer, len);
 		info->check_media(obj);
 		info->free(obj);
 	}
 	/* bench finished */
-	g_timer_stop(timer);
+	btimer_stop(timer);
 	print_bench_stat("decode object & check media field", info->name, timer, count);
-	return g_timer_elapsed(timer, NULL);
+	return btimer_elapsed(timer);
 }
 
 static int bench_enc_run(BenchEncInfo *info) {
@@ -330,11 +408,6 @@ int main(int argc, char **argv) {
 
 	init_protobuf();
 
-#if MEMORY_PROFILE
-	// install glib memory profiler.
-	g_mem_set_vtable(glib_mem_profiler_table);
-#endif
-
 	// find test name and parse common args.
 	while(argc > arg_offset) {
 		c = argv[arg_offset][0];
@@ -362,9 +435,6 @@ int main(int argc, char **argv) {
 		printf("============================================================================\n");
 		rc = bench_enc_run(info);
 		printf("============================================================================\n\n");
-#if MEMORY_PROFILE
-		g_mem_profile();
-#endif
 	}
 	if(rc != 0 && info != NULL) {
 		printf(

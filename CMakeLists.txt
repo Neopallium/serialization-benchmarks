@@ -22,6 +22,10 @@ include(CustomMacros)
 option(BENCH_PROTOBUF "Benchmark google protocol buffers" ON)
 option(BENCH_AVRO "Benchmark Avro" ON)
 
+option(USE_CLOCK_GETTIME "Use clock_gettime() if available, for timings." ON)
+option(USE_GTIMER "Use GTimer from glib, for timings." ON)
+option(USE_GETTIMEOFDAY "Use gettimeofday(), for timings." ON)
+
 #
 # Find system libraries
 #
@@ -29,10 +33,47 @@ set(COMMON_CFLAGS)
 set(COMMON_LDFLAGS)
 set(COMMON_LIBS)
 
-## GLib 2.0
-pkg_search_module(GLIB REQUIRED glib-2.0>=2.14)
-set(COMMON_CFLAGS "${COMMON_CFLAGS} ${GLIB_CFLAGS}")
-set(COMMON_LDFLAGS "${COMMON_LDFLAGS} ${GLIB_LDFLAGS}")
+##
+## Find a clock.
+##
+unset(HAVE_CLOCK_GETTIME CACHE)
+unset(HAVE_GTIMER CACHE)
+unset(HAVE_GETTIMEOFDAY CACHE)
+set(FOUND_CLOCK FALSE)
+if(USE_CLOCK_GETTIME)
+	set(CMAKE_REQUIRED_FLAGS "-lrt")
+	# check for clock_gettime() function.
+	check_c_source_compiles("
+		#include <time.h>
+		int main() {
+			struct timespec tp;
+			return clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tp);
+		}" HAVE_CLOCK_GETTIME)
+	set(FOUND_CLOCK ${HAVE_CLOCK_GETTIME})
+	if(HAVE_CLOCK_GETTIME)
+		set(COMMON_LDFLAGS "${COMMON_LDFLAGS} -lrt")
+	endif(HAVE_CLOCK_GETTIME)
+endif(USE_CLOCK_GETTIME)
+
+if(USE_GTIMER AND NOT FOUND_CLOCK)
+	## GLib 2.0
+	pkg_search_module(GLIB glib-2.0>=2.14)
+	set(COMMON_CFLAGS "${COMMON_CFLAGS} ${GLIB_CFLAGS}")
+	set(COMMON_LDFLAGS "${COMMON_LDFLAGS} ${GLIB_LDFLAGS}")
+	set(HAVE_GTIMER ${GLIB_FOUND})
+	set(FOUND_CLOCK ${HAVE_GTIMER})
+endif(USE_GTIMER AND NOT FOUND_CLOCK)
+
+if(USE_GETTIMEOFDAY AND NOT FOUND_CLOCK)
+	# check for gettimeofday() function.
+	check_c_source_compiles("
+		#include <sys/time.h>
+		int main() {
+			struct timeval tv;
+			return gettimeofday(&tv, 0);
+		}" HAVE_GETTIMEOFDAY)
+	set(FOUND_CLOCK ${HAVE_GETTIMEOFDAY})
+endif(USE_GETTIMEOFDAY AND NOT FOUND_CLOCK)
 
 ## Protobuf
 if(BENCH_PROTOBUF)
