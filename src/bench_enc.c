@@ -324,8 +324,6 @@ static void print_usage(char *name) {
 
 int main(int argc, char **argv) {
 	BenchEncInfo *info = NULL;
-	struct timeval tv;
-	unsigned int seed;
 	int arg_offset = 1;
 	int rc = 0;
 	char c;
@@ -337,11 +335,6 @@ int main(int argc, char **argv) {
 	g_mem_set_vtable(glib_mem_profiler_table);
 #endif
 
-	/* Use static seed for random number initialization to make tests reproducible.
-	 * Use '-r' or '-s <seed>' option for a more random seed.
-	 */
-	seed = 0x49234B4C;
-
 	// find test name and parse common args.
 	while(argc > arg_offset) {
 		c = argv[arg_offset][0];
@@ -350,15 +343,6 @@ int main(int argc, char **argv) {
 		}
 		c = argv[arg_offset][1];
 		switch(c) {
-		case 'r':
-			gettimeofday(&tv, NULL);
-			tv.tv_sec += tv.tv_usec * 186;
-			seed = (unsigned int) tv.tv_sec;
-			break;
-		case 's':
-			arg_offset++;
-			seed = (unsigned int)strtol(argv[arg_offset], NULL, 16);
-			break;
 		case 'm':
 			arg_offset++;
 			loop_multipler = atoi(argv[arg_offset]);
@@ -373,11 +357,6 @@ int main(int argc, char **argv) {
 		}
 		arg_offset++;
 	}
-
-	/* use seed to initialize randomization. */
-	srand(seed);
-	srandom(seed);
-	printf("Using random seed = '0x%X'\n", seed);
 
 	while((info = bench_enc_get_next(info)) != NULL) {
 		printf("============================================================================\n");
@@ -402,7 +381,6 @@ int main(int argc, char **argv) {
 	cleanup_protobuf();
 	fflush(stdout);
 
-	printf("Using random seed = '0x%X'\n", seed);
 	return rc;
 }
 
