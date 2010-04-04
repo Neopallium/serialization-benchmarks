@@ -23,6 +23,10 @@
 		cleanup_ ## bench_name, \
 		#bench_name, \
 		_desc, \
+		NULL, \
+		NULL, \
+		NULL, \
+		0, \
 		NULL \
 	}; \
 	STATIC_CONSTRUCTOR(bench_ ## bench_name) { \
@@ -60,6 +64,10 @@ struct BenchEncInfo {
 	cleanup_func  cleanup;
 	const char    *name;
 	const char    *desc;
+	double        *stats;
+	uint32_t      *counts;
+	size_t        *bytes;
+	uint32_t      encode_size;
 	BenchEncInfo *next;
 };
 

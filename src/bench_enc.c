@@ -15,13 +15,16 @@
 
 #define MAX_BUFFER_SIZE 128 * 1024
 
+#undef MAX_DOUBLE
+#define MAX_DOUBLE (1.0e30)
+
 static int loop_multipler = 100;
 
-#define LOOP_YIELD         (1 * loop_multipler)
-#define LOOP_ENC_DEC       (100 * loop_multipler)
+#define LOOP_ENC_DEC       (20 * loop_multipler)
 #define LOOP_CREATE_DELETE (20 * loop_multipler)
 #define LOOP_ROUND_TRIP    (20 * loop_multipler)
-#define LOOP_CREATE        (2000)
+#define LOOP_CREATE        (20 * loop_multipler)
+#define TRIALS 20
 
 #include "btimer.h"
 
@@ -68,10 +71,57 @@ static void bench_enc_free(BenchEnc *bench) {
 	free(bench);
 }
 
+typedef enum {
+	BenchCreateAndDeleteEmpty   = 0,
+	BenchCreateAndDeleteFull    = 1,
+	BenchEncodeDifferentObjects = 2,
+	BenchEncodeSameObject       = 3,
+	BenchDecodeObject           = 4,
+	BenchDecodeSameObject       = 5,
+	BenchDecodeObjectCheckAll   = 6,
+	BenchDecodeObjectCheckMedia = 7,
+	BenchDecodeEncodeRoundTrip  = 8,
+	BenchStatIdMax              = 9,
+} BenchStatID;
+#define MAX_BENCH_STATS BenchStatIdMax
+
+typedef struct BenchStatInfo {
+	bool  is_create; /**< is create & delete benchmark. */
+	char  *name;     /**< short description. */
+	char  *desc;     /**< long description. */
+} BenchStatInfo;
+
+static BenchStatInfo bench_enc_stats_info[] = {
+	{ 1, "Create empty",         "create & delete empty object" },
+	{ 1, "Create full",          "create & delete full object" },
+	{ 0, "Encode diff",          "encode different objects" },
+	{ 0, "Encode same",          "encode same object" },
+	{ 0, "Decode",               "decode object" },
+	{ 0, "Decode same",          "decode same object" },
+	{ 0, "Decode & Check all",   "decode object & check all fields" },
+	{ 0, "Decode & Check media", "decode object & check media field" },
+	{ 0, "Round Trip",           "Round trip decode <-> encode <-> delete" },
+};
+
 static BenchEncInfo *bench_enc_list = NULL;
 void bench_enc_reg(BenchEncInfo *test) {
 	test->next = bench_enc_list;
 	bench_enc_list = test;
+	/* allocate stats/counts array for encoder. */
+	test->stats = (double *)calloc(MAX_BENCH_STATS, sizeof(double));
+	for(int i=0; i<MAX_BENCH_STATS; i++) test->stats[i] = MAX_DOUBLE;
+	test->bytes = (size_t *)calloc(MAX_BENCH_STATS, sizeof(size_t));
+	test->counts = (uint32_t *)calloc(MAX_BENCH_STATS, sizeof(uint32_t));
+}
+
+static void bench_enc_cleanup_stats() {
+	BenchEncInfo *info = bench_enc_list;
+	while(info) {
+		free(info->stats);
+		free(info->bytes);
+		free(info->counts);
+		info = info->next;
+	}
 }
 
 BenchEncInfo *bench_enc_get_next(BenchEncInfo *info) {
@@ -81,16 +131,98 @@ BenchEncInfo *bench_enc_get_next(BenchEncInfo *info) {
 	return info->next;
 }
 
-static void print_bench_stat(const char *action, const char *name, BTimer timer, uint32_t count) {
-	double secs;
-	secs = btimer_elapsed(timer);
-	printf("%s: %s: %d at %1.0f per second\n", name, action, count,
-		(double)(count / secs));
-	printf("%s: %3.3f usecs\n", name, ((double)((secs * 1000000) / count)));
-	printf("%s: Elapsed time: %f seconds\n\n", name, secs);
+static int stat_width(int id) {
+	int width = 12;
+	int name_len = strlen(bench_enc_stats_info[id].name);
+	return (width < name_len) ? name_len : width;
 }
 
-static double bench_create_empty_objects(BenchEnc *bench, uint32_t count) {
+/* print stats table. */
+static void bench_enc_print_stats() {
+	BenchEncInfo *info = bench_enc_list;
+	int s;
+
+	/* print headers. */
+	printf("Units: nano seconds\n");
+	printf("%10s", "");
+	for(s = 0; s < MAX_BENCH_STATS; s++) {
+		printf(", %12s", bench_enc_stats_info[s].name);
+	}
+	printf(", %12s", "Encode Size");
+	printf("\n");
+	info = bench_enc_list;
+	while(info) {
+		printf("%-10s", info->name);
+		for(s = 0; s < MAX_BENCH_STATS; s++) {
+			printf(", %*.0f", stat_width(s),
+				((double)((info->stats[s] * NSEC_PER_SEC) / info->counts[s])));
+		}
+		printf(", %12.0f", ((double)info->encode_size));
+		printf("\n");
+		info = info->next;
+	}
+	printf("\n");
+#if 1
+	/* print headers. */
+	printf("Units: MBytes per second.\n");
+	printf("%10s", "");
+	for(s = 0; s < MAX_BENCH_STATS; s++) {
+		if(bench_enc_stats_info[s].is_create) continue;
+		printf(", %12s", bench_enc_stats_info[s].name);
+	}
+	printf("\n");
+	info = bench_enc_list;
+	while(info) {
+		printf("%-10s", info->name);
+		for(s = 0; s < MAX_BENCH_STATS; s++) {
+			if(bench_enc_stats_info[s].is_create) continue;
+			printf(", %*.3f", stat_width(s), ((double)info->bytes[s]) / info->stats[s] / (1024 * 1024));
+		}
+		printf("\n");
+		info = info->next;
+	}
+#endif
+	printf("\n");
+#if 1
+	/* print headers. */
+	printf("Units: Objects per second.\n");
+	printf("%10s", "");
+	for(s = 0; s < MAX_BENCH_STATS; s++) {
+		printf(", %12s", bench_enc_stats_info[s].name);
+	}
+	printf("\n");
+	info = bench_enc_list;
+	while(info) {
+		printf("%-10s", info->name);
+		for(s = 0; s < MAX_BENCH_STATS; s++) {
+			printf(", %*.0f", stat_width(s), ((double)info->counts[s]) / info->stats[s]);
+		}
+		printf("\n");
+		info = info->next;
+	}
+#endif
+}
+
+static void record_bench_stat(BenchStatID stat_id, BenchEnc *bench, uint32_t count, size_t bytes) {
+	BenchEncInfo *info = bench->info;
+	double secs;
+
+	if(stat_id > MAX_BENCH_STATS) return;
+
+	secs = btimer_elapsed(bench->timer);
+	/* only keep the minimum of each round. */
+	if(info->stats[stat_id] > secs) {
+		info->stats[stat_id] = secs;
+		info->bytes[stat_id] = bytes;
+		info->counts[stat_id] = count;
+	}
+#if 0
+	printf("%20s: %6.0f nsecs\n", bench_enc_stats_info[stat_id].name,
+		((double)((secs * NSEC_PER_SEC) / count)));
+#endif
+}
+
+static void bench_create_empty_objects(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	void         *obj = NULL;
@@ -104,11 +236,10 @@ static double bench_create_empty_objects(BenchEnc *bench, uint32_t count) {
 	}
 	/* bench finished */
 	btimer_stop(timer);
-	print_bench_stat("create & delete empty object", info->name, timer, count);
-	return btimer_elapsed(timer);
+	record_bench_stat(BenchCreateAndDeleteEmpty, bench, count, 0);
 }
 
-static double bench_create_full_objects(BenchEnc *bench, uint32_t count) {
+static void bench_create_full_objects(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	void         *obj = NULL;
@@ -122,11 +253,10 @@ static double bench_create_full_objects(BenchEnc *bench, uint32_t count) {
 	}
 	/* bench finished */
 	btimer_stop(timer);
-	print_bench_stat("create & delete full object", info->name, timer, count);
-	return btimer_elapsed(timer);
+	record_bench_stat(BenchCreateAndDeleteFull, bench, count, 0);
 }
 
-static double bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
+static void bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
@@ -134,6 +264,7 @@ static double bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
 	void         *state = bench->state;
 	void         *obj = NULL;
 	size_t       len = 0;
+	size_t       total_len = 0;
 	uint32_t     n;
 
 	/* start timer. */
@@ -141,16 +272,17 @@ static double bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
 	for(n = 0; n < count; n++) {
 		obj = info->build(NULL);
 		len = info->encode(state, obj, buffer, buflen);
+		total_len += len;
 		info->free(obj);
 	}
 	/* bench finished */
 	btimer_stop(timer);
-	printf("obj encode len = %zu\n", len);
-	print_bench_stat("encode different objects", info->name, timer, count);
-	return btimer_elapsed(timer);
+	/* record encode size. */
+	info->encode_size = len;
+	record_bench_stat(BenchEncodeDifferentObjects, bench, count, total_len);
 }
 
-static double bench_encode_same_object(BenchEnc *bench, uint32_t count) {
+static void bench_encode_same_object(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
@@ -158,6 +290,7 @@ static double bench_encode_same_object(BenchEnc *bench, uint32_t count) {
 	void         *state = bench->state;
 	void         *obj = NULL;
 	size_t       len = 0;
+	size_t       total_len = 0;
 	uint32_t     n;
 
 	obj = info->build(NULL);
@@ -165,16 +298,15 @@ static double bench_encode_same_object(BenchEnc *bench, uint32_t count) {
 	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		len = info->encode(state, obj, buffer, buflen);
+		total_len += len;
 	}
 	/* bench finished */
 	btimer_stop(timer);
-	printf("obj encode len = %zu\n", len);
-	print_bench_stat("encode same object", info->name, timer, count);
+	record_bench_stat(BenchEncodeSameObject, bench, count, total_len);
 	info->free(obj);
-	return btimer_elapsed(timer);
 }
 
-static double bench_decode_object(BenchEnc *bench, uint32_t count) {
+static void bench_decode_object(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
@@ -182,13 +314,13 @@ static double bench_decode_object(BenchEnc *bench, uint32_t count) {
 	void         *state = bench->state;
 	void         *obj = NULL;
 	size_t       len = 0;
+	size_t       total_len = 0;
 	uint32_t     n;
 
 	/* encode object. */
 	obj = info->build(NULL);
 	len = info->encode(state, obj, buffer, buflen);
 	info->free(obj);
-	printf("obj len = %zu\n", len);
 
 	/* start timer. */
 	btimer_start(timer);
@@ -198,11 +330,11 @@ static double bench_decode_object(BenchEnc *bench, uint32_t count) {
 	}
 	/* bench finished */
 	btimer_stop(timer);
-	print_bench_stat("decode object", info->name, timer, count);
-	return btimer_elapsed(timer);
+	total_len = len * count;
+	record_bench_stat(BenchDecodeObject, bench, count, total_len);
 }
 
-static double bench_decode_same_object(BenchEnc *bench, uint32_t count) {
+static void bench_decode_same_object(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
@@ -210,6 +342,7 @@ static double bench_decode_same_object(BenchEnc *bench, uint32_t count) {
 	void         *state = bench->state;
 	void         *obj = NULL;
 	size_t       len = 0;
+	size_t       total_len = 0;
 	uint32_t     n;
 
 	/* encode object. */
@@ -217,7 +350,6 @@ static double bench_decode_same_object(BenchEnc *bench, uint32_t count) {
 	len = info->encode(state, obj, buffer, buflen);
 	info->free(obj);
 	obj = NULL;
-	printf("obj len = %zu\n", len);
 
 	/* start timer. */
 	btimer_start(timer);
@@ -227,11 +359,11 @@ static double bench_decode_same_object(BenchEnc *bench, uint32_t count) {
 	info->free(obj);
 	/* bench finished */
 	btimer_stop(timer);
-	print_bench_stat("decode same object", info->name, timer, count);
-	return btimer_elapsed(timer);
+	total_len = len * count;
+	record_bench_stat(BenchDecodeSameObject, bench, count, total_len);
 }
 
-static double bench_decode_object_check_all(BenchEnc *bench, uint32_t count) {
+static void bench_decode_object_check_all(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
@@ -239,13 +371,13 @@ static double bench_decode_object_check_all(BenchEnc *bench, uint32_t count) {
 	void         *state = bench->state;
 	void         *obj = NULL;
 	size_t       len = 0;
+	size_t       total_len = 0;
 	uint32_t     n;
 
 	/* encode object. */
 	obj = info->build(NULL);
 	len = info->encode(state, obj, buffer, buflen);
 	info->free(obj);
-	printf("obj len = %zu\n", len);
 
 	/* start timer. */
 	btimer_start(timer);
@@ -256,11 +388,11 @@ static double bench_decode_object_check_all(BenchEnc *bench, uint32_t count) {
 	}
 	/* bench finished */
 	btimer_stop(timer);
-	print_bench_stat("decode object & check all fields", info->name, timer, count);
-	return btimer_elapsed(timer);
+	total_len = len * count;
+	record_bench_stat(BenchDecodeObjectCheckAll, bench, count, total_len);
 }
 
-static double bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
+static void bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
@@ -268,13 +400,13 @@ static double bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
 	void         *state = bench->state;
 	void         *obj = NULL;
 	size_t       len = 0;
+	size_t       total_len = 0;
 	uint32_t     n;
 
 	/* encode object. */
 	obj = info->build(NULL);
 	len = info->encode(state, obj, buffer, buflen);
 	info->free(obj);
-	printf("obj len = %zu\n", len);
 
 	/* start timer. */
 	btimer_start(timer);
@@ -285,13 +417,44 @@ static double bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
 	}
 	/* bench finished */
 	btimer_stop(timer);
-	print_bench_stat("decode object & check media field", info->name, timer, count);
-	return btimer_elapsed(timer);
+	total_len = len * count;
+	record_bench_stat(BenchDecodeObjectCheckMedia, bench, count, total_len);
+}
+
+static void bench_decode_encode_round_trip(BenchEnc *bench, uint32_t count) {
+	BTimer       timer = bench->timer;
+	BenchEncInfo *info = bench->info;
+	char         *buffer = bench->buffer;
+	size_t       buflen = bench->len;
+	void         *state = bench->state;
+	void         *obj = NULL;
+	size_t       len = 0;
+	size_t       total_len = 0;
+	uint32_t     n;
+
+	/* encode object. */
+	obj = info->build(NULL);
+	len = info->encode(state, obj, buffer, buflen);
+	info->free(obj);
+
+	/* start timer. */
+	btimer_start(timer);
+	for(n = 0; n < count; n++) {
+		obj = info->decode(state, NULL, buffer, len);
+		total_len += len;
+		len = info->encode(state, obj, buffer, buflen);
+		total_len += len;
+		info->free(obj);
+	}
+	/* bench finished */
+	btimer_stop(timer);
+	record_bench_stat(BenchDecodeEncodeRoundTrip, bench, count, total_len);
 }
 
 static int bench_enc_run(BenchEncInfo *info) {
 	BenchEnc *bench = NULL;
 	int      rc = 0;
+	int i;
 	void *obj;
 
 	printf("Benchmark: %s\n", info->name);
@@ -302,23 +465,34 @@ static int bench_enc_run(BenchEncInfo *info) {
 	info->check_all(obj);
 	info->free(obj);
 
-	bench_create_empty_objects(bench, LOOP_CREATE_DELETE);
-	bench_create_full_objects(bench, LOOP_CREATE_DELETE);
+	for(i = 0; i < TRIALS; i++)
+		bench_create_empty_objects(bench, LOOP_CREATE_DELETE);
+	for(i = 0; i < TRIALS; i++)
+		bench_create_full_objects(bench, LOOP_CREATE_DELETE);
 
-	bench_encode_different_objects(bench, LOOP_ENC_DEC);
-	bench_encode_same_object(bench, LOOP_ENC_DEC);
+	for(i = 0; i < TRIALS; i++)
+		bench_encode_different_objects(bench, LOOP_ENC_DEC);
+	for(i = 0; i < TRIALS; i++)
+		bench_encode_same_object(bench, LOOP_ENC_DEC);
 
-	bench_decode_object(bench, LOOP_ENC_DEC);
-	bench_decode_same_object(bench, LOOP_ENC_DEC);
-	bench_decode_object_check_all(bench, LOOP_ENC_DEC);
-	bench_decode_object_check_media(bench, LOOP_ENC_DEC);
+	for(i = 0; i < TRIALS; i++)
+		bench_decode_object(bench, LOOP_ENC_DEC);
+	for(i = 0; i < TRIALS; i++)
+		bench_decode_same_object(bench, LOOP_ENC_DEC);
+	for(i = 0; i < TRIALS; i++)
+		bench_decode_object_check_all(bench, LOOP_ENC_DEC);
+	for(i = 0; i < TRIALS; i++)
+		bench_decode_object_check_media(bench, LOOP_ENC_DEC);
+
+	for(i = 0; i < TRIALS; i++)
+		bench_decode_encode_round_trip(bench, LOOP_ROUND_TRIP);
 
 	bench_enc_free(bench);
 	return rc;
 }
 
 static void print_usage(char *name) {
-	printf("Usage: %s [--dump] [-r] [-s <hex seed>] <test name> [<test options>]\n", name);
+	printf("Usage: %s [--dump]\n", name);
 }
 
 int main(int argc, char **argv) {
@@ -347,15 +521,14 @@ int main(int argc, char **argv) {
 			break;
 		default:
 			printf("Unkown common option '%s'\n", argv[arg_offset]);
+			print_usage(argv[0]);
 			break;
 		}
 		arg_offset++;
 	}
 
 	while((info = bench_enc_get_next(info)) != NULL) {
-		printf("============================================================================\n");
 		rc = bench_enc_run(info);
-		printf("============================================================================\n\n");
 	}
 	if(rc != 0 && info != NULL) {
 		printf(
@@ -367,8 +540,11 @@ int main(int argc, char **argv) {
 		"++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
 		"============================================================================\n",
 		info->name, rc);
+	} else {
+		bench_enc_print_stats();
 	}
 
+	bench_enc_cleanup_stats();
 	cleanup_protobuf();
 	fflush(stdout);
 
