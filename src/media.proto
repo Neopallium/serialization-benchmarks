@@ -1,4 +1,4 @@
-// See README.txt for information and build instructions.
+// This file is from: http://code.google.com/p/thrift-protobuf-compare
 
 package serializers.protobuf;
 

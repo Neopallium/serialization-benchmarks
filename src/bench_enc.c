@@ -83,12 +83,11 @@ BenchEncInfo *bench_enc_get_next(BenchEncInfo *info) {
 }
 
 static void print_bench_stat(const char *action, const char *name, GTimer *timer, uint32_t count) {
-	gulong usecs;
 	double secs;
-	secs = g_timer_elapsed(timer, &usecs);
+	secs = g_timer_elapsed(timer, NULL);
 	printf("%s: %s: %d at %1.0f per second\n", name, action, count,
 		(double)(count / secs));
-	printf("%s: %3.2f nsecs\n", name, (usecs / count) * 1000.0);
+	printf("%s: %3.3f usecs\n", name, ((double)((secs * 1000000) / count)));
 	printf("%s: Elapsed time: %f seconds\n\n", name, secs);
 }
 
