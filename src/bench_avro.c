@@ -299,6 +299,8 @@ static size_t encode_avro(void *state, void *obj, char *buf, size_t len) {
 	AvroBenchState *bstate = (AvroBenchState *)state;
 	avro_datum_t datum = (avro_datum_t)obj;
 	int rc = 0;
+	(void)buf;
+	(void)len;
 
 	avro_writer_reset(bstate->writer);
 	/* encode object. */

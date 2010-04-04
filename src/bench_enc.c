@@ -66,7 +66,7 @@ typedef GTimer *BTimer;
 #define btimer_free(timer) g_timer_destroy(timer)
 #define btimer_start(timer) g_timer_start(timer)
 #define btimer_stop(timer) g_timer_stop(timer)
-#define btimer_elapsed(timer) g_timer_elapsed(timer)
+#define btimer_elapsed(timer) g_timer_elapsed(timer, NULL)
 #else /* ifdef HAVE_GTIMER. */
 
 #ifdef HAVE_GETTIMEOFDAY

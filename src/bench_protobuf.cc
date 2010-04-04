@@ -108,10 +108,13 @@ static void check_all_protobuf(void *obj) {
 }
 
 static void * init_protobuf(char *buf, size_t len) {
+	(void)buf;
+	(void)len;
 	return NULL;
 }
 
 static void cleanup_protobuf(void *state) {
+	(void)state;
 }
 
 static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) {
@@ -119,8 +122,10 @@ static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) 
 	int len;
 	uint8_t *p;
 	uint8_t *p_end;
+	(void)state;
 
 	len = content->ByteSize();
+	if(len > (int)buflen) return 0;
 	p = (uint8_t *)buf;
 	p_end = content->SerializeWithCachedSizesToArray(p);
 	if((p_end - p) < len) {
@@ -132,6 +137,7 @@ static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) 
 
 static void * decode_protobuf(void *state, void *obj, char *buf, size_t len) {
 	MediaContent *content = (obj) ? (MediaContent *)obj : new MediaContent();
+	(void)state;
 
 	if(!content->ParseFromArray(buf, len)) {
 		printf("Decoder failed: \n");
