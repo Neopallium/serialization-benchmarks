@@ -11,7 +11,7 @@
 #include <sys/user.h>
 #include "bench_enc.h"
 
-#include "protobuf.h"
+#define TEST 0
 
 #define MAX_BUFFER_SIZE 128 * 1024
 
@@ -24,7 +24,11 @@ static int loop_multipler = 100;
 #define LOOP_CREATE_DELETE (20 * loop_multipler)
 #define LOOP_ROUND_TRIP    (20 * loop_multipler)
 #define LOOP_CREATE        (20 * loop_multipler)
+#if TEST
+#define TRIALS 1
+#else
 #define TRIALS 20
+#endif
 
 #include "btimer.h"
 
@@ -216,7 +220,7 @@ static void record_bench_stat(BenchStatID stat_id, BenchEnc *bench, uint32_t cou
 		info->bytes[stat_id] = bytes;
 		info->counts[stat_id] = count;
 	}
-#if 0
+#if TEST
 	printf("%20s: %6.0f nsecs\n", bench_enc_stats_info[stat_id].name,
 		((double)((secs * NSEC_PER_SEC) / count)));
 #endif
@@ -501,8 +505,6 @@ int main(int argc, char **argv) {
 	int rc = 0;
 	char c;
 
-	init_protobuf();
-
 	// find test name and parse common args.
 	while(argc > arg_offset) {
 		c = argv[arg_offset][0];
@@ -545,7 +547,6 @@ int main(int argc, char **argv) {
 	}
 
 	bench_enc_cleanup_stats();
-	cleanup_protobuf();
 	fflush(stdout);
 
 	return rc;

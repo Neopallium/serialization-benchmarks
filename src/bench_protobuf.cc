@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 
+#include <google/protobuf/stubs/common.h>
 #include "media.pb.h"
 
 using namespace serializers::protobuf;
@@ -110,11 +111,15 @@ static void check_all_protobuf(void *obj) {
 static void * init_protobuf(char *buf, size_t len) {
 	(void)buf;
 	(void)len;
+	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	return NULL;
 }
 
 static void cleanup_protobuf(void *state) {
 	(void)state;
+#ifdef BENCH_PROTOBUF
+	google::protobuf::ShutdownProtobufLibrary();
+#endif
 }
 
 static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) {

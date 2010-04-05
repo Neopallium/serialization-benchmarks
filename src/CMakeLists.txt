@@ -9,7 +9,6 @@ set(AVRO_SRC
 set(PROTOBUF_SRC
 	bench_protobuf.cc
 	media.proto
-	protobuf.cc
 )
 set(BENCH_SRC
 	bench_enc.c
