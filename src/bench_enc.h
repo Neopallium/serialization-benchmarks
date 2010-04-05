@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define STATIC_CONSTRUCTOR(name) static void __attribute ((constructor)) init_ ## name (void)
+#define STATIC_CONSTRUCTOR(name) static void __attribute__ ((constructor)) init_ ## name (void)
 
 #define BENCH_ENC_REG(bench_name, _desc) \
 	static BenchEncInfo bench_enc_info_ ## bench_name = { \
