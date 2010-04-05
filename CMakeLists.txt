@@ -97,13 +97,14 @@ if(BENCH_AVRO)
 			avro_datum_t test, array;
 			return avro_array_get(array, 0, &test);
 		}" HAVE_avro_array_get)
+	set(CMAKE_REQUIRED_LIBRARIES "")
 endif(BENCH_AVRO)
 
 ## generate config.h
 configure_file(${CMAKE_SOURCE_DIR}/config.h.cmake
         ${CMAKE_SOURCE_DIR}/build/config.h)
 
-set(COMMON_CFLAGS "${COMMON_CFLAGS} -include config.h")
+set(COMMON_CFLAGS "${COMMON_CFLAGS} -include ${CMAKE_SOURCE_DIR}/build/config.h")
 
 #
 # Setup CMAKE_C_FLAGS* and CMAKE_CXX_FLAGS*
