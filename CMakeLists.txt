@@ -97,6 +97,12 @@ if(BENCH_AVRO)
 			avro_datum_t test, array;
 			return avro_array_get(array, 0, &test);
 		}" HAVE_avro_array_get)
+	# check Avro version 1.3.2 or 1.4.x API.
+	check_c_source_compiles("
+		#include <avro.h>
+		int main() {
+			avro_atom_t test = avro_atom_add(\"test\");
+		}" HAVE_AVRO_NEW)
 	set(CMAKE_REQUIRED_LIBRARIES "")
 endif(BENCH_AVRO)
 
