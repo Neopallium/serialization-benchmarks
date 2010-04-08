@@ -85,6 +85,7 @@ endif(BENCH_PROTOBUF)
 
 ## Avro
 if(BENCH_AVRO)
+	unset(HAVE_AVRO_NEW CACHE)
 	find_package(LibAvro)
 	include_directories(${LIBAVRO_INCLUDE_DIR})
 	set(COMMON_LIBS "${COMMON_LIBS};${LIBAVRO_LIBRARY}")
