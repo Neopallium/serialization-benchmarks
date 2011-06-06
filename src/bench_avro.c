@@ -9,6 +9,8 @@
 
 #include "bench_enc.h"
 
+#define VERBOSE 0
+
 enum Size {
 	SMALL = 0,
 	LARGE = 1
@@ -19,39 +21,13 @@ enum Player {
 	FLASH = 1
 };
 
-AVRO_ATOMS_HOLDER_START(media)
-AVRO_ATOMS_HOLDER(bitrate)
-AVRO_ATOMS_HOLDER(copyright)
-AVRO_ATOMS_HOLDER(duration)
-AVRO_ATOMS_HOLDER(format)
-AVRO_ATOMS_HOLDER(height)
-AVRO_ATOMS_HOLDER(image)
-AVRO_ATOMS_HOLDER(media)
-AVRO_ATOMS_HOLDER(person)
-AVRO_ATOMS_HOLDER(player)
-AVRO_ATOMS_HOLDER(size)
-AVRO_ATOMS_HOLDER(title)
-AVRO_ATOMS_HOLDER(uri)
-AVRO_ATOMS_HOLDER(width)
-AVRO_ATOMS_HOLDER_END(media)
+avro_schema_t media_content_sch;
+avro_schema_t image_array_sch;
+avro_schema_t image_sch;
+avro_schema_t media_sch;
+avro_schema_t person_array_sch;
 
-AVRO_ATOMS_REG_START(media)
-AVRO_ATOMS_REG(media, bitrate, bitrate)
-AVRO_ATOMS_REG(media, copyright, copyright)
-AVRO_ATOMS_REG(media, duration, duration)
-AVRO_ATOMS_REG(media, format, format)
-AVRO_ATOMS_REG(media, height, height)
-AVRO_ATOMS_REG(media, image, image)
-AVRO_ATOMS_REG(media, media, media)
-AVRO_ATOMS_REG(media, person, person)
-AVRO_ATOMS_REG(media, player, player)
-AVRO_ATOMS_REG(media, size, size)
-AVRO_ATOMS_REG(media, title, title)
-AVRO_ATOMS_REG(media, uri, uri)
-AVRO_ATOMS_REG(media, width, width)
-AVRO_ATOMS_REG_END(media)
-
-static const char *media_schema =
+static const char *media_content_schema =
 "{\"type\": \"record\", \"name\":\"MediaContent\", \"namespace\": \"serializers.avro.specific\","
 "  \"fields\": ["
 "    {\"name\": \"image\", \"type\": {\"type\": \"array\", "
@@ -85,14 +61,39 @@ static const char *media_schema =
 "  ]"
 "}";
 
+#if VERBOSE
+#define DUMP_SCHEMA_BUFLEN 64 * 1024
+static void dump_avro_schema(const avro_schema_t schema, const char *prefix) {
+	avro_writer_t out;
+	char buf[DUMP_SCHEMA_BUFLEN];
+	int64_t rc;
+
+	if(schema == NULL) {
+		fprintf(stdout,"%s: NULL schema\n", prefix);
+		return;
+	}
+	fprintf(stdout,"%s: ", prefix);
+	out = avro_writer_memory(buf, DUMP_SCHEMA_BUFLEN);
+	avro_schema_to_json(schema, out);
+	rc = avro_writer_tell(out);
+	if(rc > 0) {
+		if(fwrite(buf, 1, rc, stdout) == 0) {
+			perror("dump_avro_scheme: fwrite()");
+		}
+	}
+	avro_writer_free(out);
+	fprintf(stdout,"\n");
+	fflush(stdout);
+}
+#endif
+
 typedef struct AvroBenchState {
-	avro_schema_t media;
 	avro_writer_t writer;
 } AvroBenchState;
 
 
 static void * create_avro() {
-	return avro_record("MediaContent", NULL);
+	return avro_record(media_content_sch);
 }
 
 static void * build_avro(void *obj) {
@@ -110,61 +111,61 @@ static void * build_avro(void *obj) {
 	content = (avro_datum_t)obj;
 
 	/* create media record. */
-	media = avro_record("Media", NULL);
-	tmp = avro_wrapstring("http://javaone.com/keynote.mpg");
-	avro_record_set(media, AVRO_ATOM(media, uri), tmp); avro_datum_decref(tmp);
-	tmp = avro_wrapstring("Javaone Keynote");
-	avro_record_set(media, AVRO_ATOM(media, title), tmp); avro_datum_decref(tmp);
-	tmp = avro_wrapstring("video/mpg4");
-	avro_record_set(media, AVRO_ATOM(media, format), tmp); avro_datum_decref(tmp);
+	media = avro_record(media_sch);
+	tmp = avro_givestring("http://javaone.com/keynote.mpg",NULL);
+	avro_record_set(media, "uri", tmp); avro_datum_decref(tmp);
+	tmp = avro_givestring("Javaone Keynote",NULL);
+	avro_record_set(media, "title", tmp); avro_datum_decref(tmp);
+	tmp = avro_givestring("video/mpg4",NULL);
+	avro_record_set(media, "format", tmp); avro_datum_decref(tmp);
 
-	tmp = avro_int32(JAVA); avro_record_set(media, AVRO_ATOM(media, player), tmp); avro_datum_decref(tmp);
-	tmp = avro_int64(1234567); avro_record_set(media, AVRO_ATOM(media, duration), tmp); avro_datum_decref(tmp);
-	tmp = avro_int64(123); avro_record_set(media, AVRO_ATOM(media, size), tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(media, AVRO_ATOM(media, height), tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(media, AVRO_ATOM(media, width), tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(media, AVRO_ATOM(media, bitrate), tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(JAVA); avro_record_set(media, "player", tmp); avro_datum_decref(tmp);
+	tmp = avro_int64(1234567); avro_record_set(media, "duration", tmp); avro_datum_decref(tmp);
+	tmp = avro_int64(123); avro_record_set(media, "size", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(0); avro_record_set(media, "height", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(0); avro_record_set(media, "width", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(0); avro_record_set(media, "bitrate", tmp); avro_datum_decref(tmp);
 
-	tmp = avro_wrapstring("");
-	avro_record_set(media, AVRO_ATOM(media, copyright), tmp); avro_datum_decref(tmp);
+	tmp = avro_givestring("",NULL);
+	avro_record_set(media, "copyright", tmp); avro_datum_decref(tmp);
 
 	/* add persons. */
-	array = avro_array();
-	tmp = avro_wrapstring("Bill Gates");
+	array = avro_array(person_array_sch);
+	tmp = avro_givestring("Bill Gates",NULL);
 	avro_array_append_datum(array, tmp); avro_datum_decref(tmp);
-	tmp = avro_wrapstring("Steve Jobs");
+	tmp = avro_givestring("Steve Jobs",NULL);
 	avro_array_append_datum(array, tmp); avro_datum_decref(tmp);
-	avro_record_set(media, AVRO_ATOM(media, person), array);
+	avro_record_set(media, "person", array);
 	avro_datum_decref(array);
 
 	/* create image records. */
-	image1 = avro_record("Image", NULL);
-	tmp = avro_wrapstring("Javaone Keynote");
-	avro_record_set(image1, AVRO_ATOM(media, title), tmp); avro_datum_decref(tmp);
-	tmp = avro_wrapstring("http://javaone.com/keynote_large.jpg");
-	avro_record_set(image1, AVRO_ATOM(media, uri), tmp); avro_datum_decref(tmp);
+	image1 = avro_record(image_sch);
+	tmp = avro_givestring("Javaone Keynote",NULL);
+	avro_record_set(image1, "title", tmp); avro_datum_decref(tmp);
+	tmp = avro_givestring("http://javaone.com/keynote_large.jpg",NULL);
+	avro_record_set(image1, "uri", tmp); avro_datum_decref(tmp);
 
-	tmp = avro_int32(0); avro_record_set(image1, AVRO_ATOM(media, height), tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(image1, AVRO_ATOM(media, width), tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(LARGE); avro_record_set(image1, AVRO_ATOM(media, size), tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(0); avro_record_set(image1, "height", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(0); avro_record_set(image1, "width", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(LARGE); avro_record_set(image1, "size", tmp); avro_datum_decref(tmp);
 
-	image2 = avro_record("Image", NULL);
-	tmp = avro_wrapstring("Javaone Keynote");
-	avro_record_set(image2, AVRO_ATOM(media, title), tmp); avro_datum_decref(tmp);
-	tmp = avro_wrapstring("http://javaone.com/keynote_thumbnail.jpg");
-	avro_record_set(image2, AVRO_ATOM(media, uri), tmp); avro_datum_decref(tmp);
+	image2 = avro_record(image_sch);
+	tmp = avro_givestring("Javaone Keynote",NULL);
+	avro_record_set(image2, "title", tmp); avro_datum_decref(tmp);
+	tmp = avro_givestring("http://javaone.com/keynote_thumbnail.jpg",NULL);
+	avro_record_set(image2, "uri", tmp); avro_datum_decref(tmp);
 
-	tmp = avro_int32(0); avro_record_set(image2, AVRO_ATOM(media, height), tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(image2, AVRO_ATOM(media, width), tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(SMALL); avro_record_set(image2, AVRO_ATOM(media, size), tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(0); avro_record_set(image2, "height", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(0); avro_record_set(image2, "width", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(SMALL); avro_record_set(image2, "size", tmp); avro_datum_decref(tmp);
 
 	/* add media & image records to content record. */
-	array = avro_array();
+	array = avro_array(image_array_sch);
 	avro_array_append_datum(array, image1);
 	avro_array_append_datum(array, image2);
-	avro_record_set(content, AVRO_ATOM(media, image), array);
+	avro_record_set(content, "image", array);
 	avro_datum_decref(array);
-	avro_record_set(content, AVRO_ATOM(media, media), media);
+	avro_record_set(content, "media", media);
 
 	avro_datum_decref(media);
 	avro_datum_decref(image1);
@@ -187,44 +188,44 @@ static void check_media_avro(void *obj) {
 	int32_t i32;
 	char *p;
 
-	check_val(avro_record_get(content, AVRO_ATOM(media, media), &media) == 0);
-	check_val(avro_record_get(media, AVRO_ATOM(media, format), &tmp) == 0);
+	check_val(avro_record_get(content, "media", &media) == 0);
+	check_val(avro_record_get(media, "format", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "video/mpg4") == 0);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, player), &tmp) == 0);
+	check_val(avro_record_get(media, "player", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == JAVA);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, title), &tmp) == 0);
+	check_val(avro_record_get(media, "title", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "Javaone Keynote") == 0);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, uri), &tmp) == 0);
+	check_val(avro_record_get(media, "uri", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "http://javaone.com/keynote.mpg") == 0);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, duration), &tmp) == 0);
+	check_val(avro_record_get(media, "duration", &tmp) == 0);
 	avro_int64_get(tmp, &i64);
 	check_val(i64 == 1234567);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, size), &tmp) == 0);
+	check_val(avro_record_get(media, "size", &tmp) == 0);
 	avro_int64_get(tmp, &i64);
 	check_val(i64 == 123);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, height), &tmp) == 0);
+	check_val(avro_record_get(media, "height", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == 0);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, width), &tmp) == 0);
+	check_val(avro_record_get(media, "width", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == 0);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, bitrate), &tmp) == 0);
+	check_val(avro_record_get(media, "bitrate", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == 0);
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, person), &array) == 0);
+	check_val(avro_record_get(media, "person", &array) == 0);
 #ifdef HAVE_avro_array_get
 	check_val(avro_array_get(array, 0, &tmp) == 0);
 	avro_string_get(tmp, &p);
@@ -234,7 +235,7 @@ static void check_media_avro(void *obj) {
 	check_val(strcmp(p, "Steve Jobs") == 0);
 #endif
 
-	check_val(avro_record_get(media, AVRO_ATOM(media, copyright), &tmp) == 0);
+	check_val(avro_record_get(media, "copyright", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "") == 0);
 
@@ -252,47 +253,47 @@ static void check_all_avro(void *obj) {
 
 	check_media_avro(content);
 
-	check_val(avro_record_get(content, AVRO_ATOM(media, image), &array) == 0);
+	check_val(avro_record_get(content, "image", &array) == 0);
 #ifdef HAVE_avro_array_get
 	check_val(avro_array_get(array, 0, &image) == 0);
-	check_val(avro_record_get(image, AVRO_ATOM(media, height), &tmp) == 0);
+	check_val(avro_record_get(image, "height", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, title), &tmp) == 0);
+	check_val(avro_record_get(image, "title", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "Javaone Keynote") == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, uri), &tmp) == 0);
+	check_val(avro_record_get(image, "uri", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "http://javaone.com/keynote_large.jpg") == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, width), &tmp) == 0);
+	check_val(avro_record_get(image, "width", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, size), &tmp) == 0);
+	check_val(avro_record_get(image, "size", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == LARGE);
 
 	check_val(avro_array_get(array, 1, &image) == 0);
-	check_val(avro_record_get(image, AVRO_ATOM(media, height), &tmp) == 0);
+	check_val(avro_record_get(image, "height", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, title), &tmp) == 0);
+	check_val(avro_record_get(image, "title", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "Javaone Keynote") == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, uri), &tmp) == 0);
+	check_val(avro_record_get(image, "uri", &tmp) == 0);
 	avro_string_get(tmp, &p);
 	check_val(strcmp(p, "http://javaone.com/keynote_thumbnail.jpg") == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, width), &tmp) == 0);
+	check_val(avro_record_get(image, "width", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == 0);
 
-	check_val(avro_record_get(image, AVRO_ATOM(media, size), &tmp) == 0);
+	check_val(avro_record_get(image, "size", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
 	check_val(i32 == SMALL);
 #endif
@@ -305,12 +306,24 @@ static void * init_avro(char *buf, size_t len) {
 
 	bstate = (AvroBenchState *)malloc(sizeof(AvroBenchState));
 
-	avro_init();
-
 	/* parser media schema. */
-	if(avro_schema_from_json(media_schema, sizeof(media_schema), &(bstate->media), &error)) {
+	if(avro_schema_from_json(media_content_schema, sizeof(media_content_schema),
+			&(media_content_sch), &error)) {
 		printf("Failed to parse media schema\n");
 	}
+
+	image_array_sch = avro_schema_record_field_get(media_content_sch, "image");
+	image_sch = avro_schema_array_items(image_array_sch);
+	media_sch = avro_schema_record_field_get(media_content_sch, "media");
+	person_array_sch = avro_schema_record_field_get(media_sch, "person");
+#if VERBOSE
+	dump_avro_schema(media_content_sch, "\nFull Schema");
+	dump_avro_schema(image_array_sch, "\nImage array");
+	dump_avro_schema(image_sch, "\nImage");
+	dump_avro_schema(media_sch, "\nMedia");
+	dump_avro_schema(person_array_sch, "\nPerson");
+	fflush(stdout);
+#endif
 	/* setup writer. */
 	bstate->writer = avro_writer_memory(buf, len);
 
@@ -324,9 +337,7 @@ static void cleanup_avro(void *state) {
 	avro_writer_free(bstate->writer);
 
 	/* release media schema. */
-	avro_schema_decref(bstate->media);
-
-	avro_shutdown();
+	avro_schema_decref(media_content_sch);
 
 	free(bstate);
 }
@@ -340,7 +351,7 @@ static size_t encode_avro(void *state, void *obj, char *buf, size_t len) {
 
 	avro_writer_reset(bstate->writer);
 	/* encode object. */
-	if((rc = avro_write_data(bstate->writer, bstate->media, datum))) {
+	if((rc = avro_write_data(bstate->writer, media_content_sch, datum))) {
 		printf("avro_write_data: failed rc=%d\n", rc);
 		return 0;
 	}
@@ -349,10 +360,10 @@ static size_t encode_avro(void *state, void *obj, char *buf, size_t len) {
 }
 
 static void * decode_avro(void *state, void *obj, char *buf, size_t len) {
-	AvroBenchState *bstate = (AvroBenchState *)state;
 	avro_reader_t reader;
 	avro_datum_t datum;
 	int rc;
+	(void)state;
 
 	/* can't re-use old object. */
 	if(obj) free_avro(obj);
@@ -360,7 +371,7 @@ static void * decode_avro(void *state, void *obj, char *buf, size_t len) {
 	reader = avro_reader_memory(buf, len);
 
 	/* decode object. */
-	if((rc = avro_read_data(reader, bstate->media, NULL, &datum))) {
+	if((rc = avro_read_data(reader, media_content_sch, NULL, &datum))) {
 		printf("avro_read_data: failed rc=%d\n", rc);
 	}
 	avro_reader_free(reader);
