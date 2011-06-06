@@ -3,14 +3,9 @@
 #
 
 set(AVRO_SRC
+	bench_avro.c
 	media.avro
 )
-if(HAVE_AVRO_NEW)
-	set(AVRO_SRC ${AVRO_SRC} bench_avro.c)
-else(HAVE_AVRO_NEW)
-	set(AVRO_SRC ${AVRO_SRC} bench_avro_old.c)
-endif(HAVE_AVRO_NEW)
-
 set(PROTOBUF_SRC
 	bench_protobuf.cc
 	media.proto
