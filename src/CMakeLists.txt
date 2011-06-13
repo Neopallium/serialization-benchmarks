@@ -9,6 +9,8 @@ set(AVRO_SRC
 set(PROTOBUF_SRC
 	bench_media_protobuf.cc
 	media.proto
+	bench_speed1_protobuf.cc
+	speed.proto
 )
 set(BENCH_SRC
 	bench_enc.c
