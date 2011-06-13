@@ -179,7 +179,7 @@ static void free_avro(void *obj) {
 	avro_datum_decref(content);
 }
 
-static void check_media_avro(void *obj) {
+static void check_part_avro(void *obj) {
 	avro_datum_t content = (avro_datum_t)obj;
 	avro_datum_t media;
 	avro_datum_t array;
@@ -251,7 +251,7 @@ static void check_all_avro(void *obj) {
 	char *p;
 #endif
 
-	check_media_avro(content);
+	check_part_avro(content);
 
 	check_val(avro_record_get(content, "image", &array) == 0);
 #ifdef HAVE_avro_array_get

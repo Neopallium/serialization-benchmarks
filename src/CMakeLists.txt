@@ -3,11 +3,11 @@
 #
 
 set(AVRO_SRC
-	bench_avro.c
+	bench_media_avro.c
 	media.avro
 )
 set(PROTOBUF_SRC
-	bench_protobuf.cc
+	bench_media_protobuf.cc
 	media.proto
 )
 set(BENCH_SRC

@@ -115,6 +115,7 @@ static BenchEncInfo *bench_enc_find_msg_list(const char *msg_name) {
 		if(strcmp(info->msg_name, msg_name) == 0) {
 			return info;
 		}
+		info = info->msg_next;
 	}
 	/* not found. */
 	return NULL;

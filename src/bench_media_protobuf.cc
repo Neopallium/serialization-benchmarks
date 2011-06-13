@@ -67,7 +67,7 @@ static void free_protobuf(void *obj) {
 	delete content;
 }
 
-static void check_media_protobuf(void *obj) {
+static void check_part_protobuf(void *obj) {
 	MediaContent *content = (MediaContent *)obj;
 	Media media;
 
@@ -90,7 +90,7 @@ static void check_all_protobuf(void *obj) {
 	MediaContent *content = (MediaContent *)obj;
 	Image image;
 
-	check_media_protobuf(content);
+	check_part_protobuf(content);
 
 	image = content->image(0);
 	check_val(image.height() == 0);

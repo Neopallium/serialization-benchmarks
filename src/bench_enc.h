@@ -19,7 +19,7 @@
 		encode_ ## bench_name, \
 		decode_ ## bench_name, \
 		check_all_ ## bench_name, \
-		check_media_ ## bench_name, \
+		check_part_ ## bench_name, \
 		init_ ## bench_name, \
 		cleanup_ ## bench_name, \
 		#bench_name, \
