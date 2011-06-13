@@ -10,8 +10,9 @@
 
 #define STATIC_CONSTRUCTOR(name) static void __attribute__ ((constructor)) init_ ## name (void)
 
-#define BENCH_ENC_REG(bench_name, _desc) \
+#define BENCH_ENC_REG(bench_name, msg_name, _desc) \
 	static BenchEncInfo bench_enc_info_ ## bench_name = { \
+		#msg_name, \
 		create_ ## bench_name, \
 		build_ ## bench_name, \
 		free_ ## bench_name, \
@@ -27,6 +28,7 @@
 		NULL, \
 		NULL, \
 		0, \
+		NULL, \
 		NULL \
 	}; \
 	STATIC_CONSTRUCTOR(bench_ ## bench_name) { \
@@ -53,6 +55,7 @@ typedef size_t (*encode_func)(void *state, void *obj, char *buf, size_t len);
 typedef void *(*decode_func)(void *state, void *obj, char *buf, size_t len);
 
 struct BenchEncInfo {
+	const char    *msg_name;
 	create_func   create;
 	build_func    build;
 	free_func     free;
@@ -68,7 +71,8 @@ struct BenchEncInfo {
 	uint32_t      *counts;
 	size_t        *bytes;
 	uint32_t      encode_size;
-	BenchEncInfo *next;
+	BenchEncInfo	*msg_next;
+	BenchEncInfo	*next;
 };
 
 extern void bench_enc_reg(BenchEncInfo *bench);

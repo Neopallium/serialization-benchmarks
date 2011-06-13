@@ -108,9 +108,31 @@ static BenchStatInfo bench_enc_stats_info[] = {
 };
 
 static BenchEncInfo *bench_enc_list = NULL;
+static BenchEncInfo *bench_enc_find_msg_list(const char *msg_name) {
+	BenchEncInfo *info = bench_enc_list;
+	/* find existing message list. */
+	while(info != NULL) {
+		if(strcmp(info->msg_name, msg_name) == 0) {
+			return info;
+		}
+	}
+	/* not found. */
+	return NULL;
+}
+
 void bench_enc_reg(BenchEncInfo *test) {
-	test->next = bench_enc_list;
-	bench_enc_list = test;
+	/* add bench test to list with the same message name. */
+	BenchEncInfo *list = bench_enc_find_msg_list(test->msg_name);
+	if(list) {
+		/* list already started for this message. */
+		test->next = list->next;
+		list->next = test;
+	} else {
+		/* new message, start new list. */
+		test->msg_next = bench_enc_list;
+		bench_enc_list = test;
+		test->next = NULL;
+	}
 	/* allocate stats/counts array for encoder. */
 	test->stats = (double *)calloc(MAX_BENCH_STATS, sizeof(double));
 	for(int i=0; i<MAX_BENCH_STATS; i++) test->stats[i] = MAX_DOUBLE;
@@ -119,18 +141,49 @@ void bench_enc_reg(BenchEncInfo *test) {
 }
 
 static void bench_enc_cleanup_stats() {
-	BenchEncInfo *info = bench_enc_list;
-	while(info) {
-		free(info->stats);
-		free(info->bytes);
-		free(info->counts);
-		info = info->next;
+	BenchEncInfo *list = bench_enc_list;
+	BenchEncInfo *info;
+
+	while(list) {
+		info = list;
+		while(info) {
+			free(info->stats);
+			free(info->bytes);
+			free(info->counts);
+			info = info->next;
+		}
+		list = list->msg_next;
 	}
+}
+
+static void bench_enc_dump_info() {
+	BenchEncInfo *list = bench_enc_list;
+	BenchEncInfo *info;
+
+	while(list) {
+		info = list;
+		printf("Message: %s\n", info->msg_name);
+		while(info) {
+			printf("  Benchmark: %s\n", info->name);
+			info = info->next;
+		}
+		list = list->msg_next;
+	}
+}
+
+static BenchEncInfo *bench_enc_current_list = NULL;
+static BenchEncInfo *bench_enc_select_msg(const char *msg_name) {
+	if(msg_name != NULL) {
+		bench_enc_current_list = bench_enc_find_msg_list(msg_name);
+	} else {
+		bench_enc_current_list = bench_enc_list;
+	}
+	return bench_enc_current_list;
 }
 
 BenchEncInfo *bench_enc_get_next(BenchEncInfo *info) {
 	if(info == NULL) {
-		return bench_enc_list;
+		return bench_enc_current_list;
 	}
 	return info->next;
 }
@@ -143,7 +196,7 @@ static int stat_width(int id) {
 
 /* print stats table. */
 static void bench_enc_print_stats() {
-	BenchEncInfo *info = bench_enc_list;
+	BenchEncInfo *info = bench_enc_current_list;
 	int s;
 
 	/* print headers. */
@@ -154,7 +207,7 @@ static void bench_enc_print_stats() {
 	}
 	printf(", %12s", "Encode Size");
 	printf("\n");
-	info = bench_enc_list;
+	info = bench_enc_current_list;
 	while(info) {
 		printf("%-10s", info->name);
 		for(s = 0; s < MAX_BENCH_STATS; s++) {
@@ -175,7 +228,7 @@ static void bench_enc_print_stats() {
 		printf(", %12s", bench_enc_stats_info[s].name);
 	}
 	printf("\n");
-	info = bench_enc_list;
+	info = bench_enc_current_list;
 	while(info) {
 		printf("%-10s", info->name);
 		for(s = 0; s < MAX_BENCH_STATS; s++) {
@@ -195,7 +248,7 @@ static void bench_enc_print_stats() {
 		printf(", %12s", bench_enc_stats_info[s].name);
 	}
 	printf("\n");
-	info = bench_enc_list;
+	info = bench_enc_current_list;
 	while(info) {
 		printf("%-10s", info->name);
 		for(s = 0; s < MAX_BENCH_STATS; s++) {
@@ -461,7 +514,7 @@ static int bench_enc_run(BenchEncInfo *info) {
 	int i;
 	void *obj;
 
-	printf("Benchmark: %s\n", info->name);
+	printf("--------- Benchmark: %s\n", info->name);
 	bench = bench_enc_new(info);
 
 	/* test check_* functions. */
@@ -496,23 +549,46 @@ static int bench_enc_run(BenchEncInfo *info) {
 }
 
 static void print_usage(char *name) {
-	printf("Usage: %s [--dump]\n", name);
+	printf("Usage: %s [-h] [-m <loop multipler>] [--dump] [<msg_name>]\n", name);
 }
+
+#define unknown_option() do { \
+	printf("Unknown option '%s'\n", opt); \
+	print_usage(argv[0]); \
+	exit(-1); \
+} while(0)
 
 int main(int argc, char **argv) {
 	BenchEncInfo *info = NULL;
+	const char *msg_name = NULL;
+	const char *opt;
 	int arg_offset = 1;
 	int rc = 0;
 	char c;
 
 	// find test name and parse common args.
 	while(argc > arg_offset) {
-		c = argv[arg_offset][0];
+		opt = argv[arg_offset];
+		c = opt[0];
 		if(c != '-') {
 			break;
 		}
-		c = argv[arg_offset][1];
+		c = opt[1];
 		switch(c) {
+		case '-':
+			c = opt[2];
+			switch(c) {
+			case 'd':
+				if(strcmp("--dump", opt) != 0) {
+					unknown_option();
+				}
+				bench_enc_dump_info();
+				exit(0);
+				break;
+			default:
+				unknown_option();
+			}
+			break;
 		case 'm':
 			arg_offset++;
 			loop_multipler = atoi(argv[arg_offset]);
@@ -522,11 +598,22 @@ int main(int argc, char **argv) {
 			exit(0);
 			break;
 		default:
-			printf("Unkown common option '%s'\n", argv[arg_offset]);
-			print_usage(argv[0]);
-			break;
+			unknown_option();
 		}
 		arg_offset++;
+	}
+	/* select message based on name. */
+	if(argc > arg_offset) {
+		msg_name = argv[arg_offset];
+		printf("Run benchmarks for message: %s\n", msg_name);
+	}
+	if(bench_enc_select_msg(msg_name) == NULL) {
+		if(msg_name) {
+			printf("Can't find benchmarks for msg_name='%s'\n", msg_name);
+		} else {
+			printf("Can't find benchmarks to run!\n");
+		}
+		return -1;
 	}
 
 	while((info = bench_enc_get_next(info)) != NULL) {

@@ -41,5 +41,5 @@ static void * decode_<benchname>(void *state, void *obj, char *buf, size_t len) 
 	return obj;
 }
 
-BENCH_ENC_REG(<benchname>, "Benchmark: <benchname> system.")
+BENCH_ENC_REG(<benchname>, msg_name, "Benchmark: <benchname> system.")
 

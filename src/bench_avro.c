@@ -378,5 +378,5 @@ static void * decode_avro(void *state, void *obj, char *buf, size_t len) {
 	return datum;
 }
 
-BENCH_ENC_REG(avro, "Benchmark: avro system.")
+BENCH_ENC_REG(avro, media, "Benchmark: avro system.")
 

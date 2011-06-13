@@ -152,7 +152,7 @@ static void * decode_protobuf(void *state, void *obj, char *buf, size_t len) {
 	return content;
 }
 
-BENCH_ENC_REG(protobuf, "Benchmark: protobuf system.")
+BENCH_ENC_REG(protobuf, media, "Benchmark: protobuf system.")
 
 }// end: extern "C"
 
