@@ -120,11 +120,11 @@ static void * build_avro(void *obj) {
 	avro_record_set(media, "format", tmp); avro_datum_decref(tmp);
 
 	tmp = avro_int32(JAVA); avro_record_set(media, "player", tmp); avro_datum_decref(tmp);
-	tmp = avro_int64(1234567); avro_record_set(media, "duration", tmp); avro_datum_decref(tmp);
-	tmp = avro_int64(123); avro_record_set(media, "size", tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(media, "height", tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(media, "width", tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(media, "bitrate", tmp); avro_datum_decref(tmp);
+	tmp = avro_int64(18000000); avro_record_set(media, "duration", tmp); avro_datum_decref(tmp);
+	tmp = avro_int64(58982400); avro_record_set(media, "size", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(480); avro_record_set(media, "height", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(640); avro_record_set(media, "width", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(262144); avro_record_set(media, "bitrate", tmp); avro_datum_decref(tmp);
 
 	tmp = avro_givestring("",NULL);
 	avro_record_set(media, "copyright", tmp); avro_datum_decref(tmp);
@@ -145,8 +145,8 @@ static void * build_avro(void *obj) {
 	tmp = avro_givestring("http://javaone.com/keynote_large.jpg",NULL);
 	avro_record_set(image1, "uri", tmp); avro_datum_decref(tmp);
 
-	tmp = avro_int32(0); avro_record_set(image1, "height", tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(image1, "width", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(768); avro_record_set(image1, "height", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(1024); avro_record_set(image1, "width", tmp); avro_datum_decref(tmp);
 	tmp = avro_int32(LARGE); avro_record_set(image1, "size", tmp); avro_datum_decref(tmp);
 
 	image2 = avro_record(image_sch);
@@ -155,8 +155,8 @@ static void * build_avro(void *obj) {
 	tmp = avro_givestring("http://javaone.com/keynote_thumbnail.jpg",NULL);
 	avro_record_set(image2, "uri", tmp); avro_datum_decref(tmp);
 
-	tmp = avro_int32(0); avro_record_set(image2, "height", tmp); avro_datum_decref(tmp);
-	tmp = avro_int32(0); avro_record_set(image2, "width", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(240); avro_record_set(image2, "height", tmp); avro_datum_decref(tmp);
+	tmp = avro_int32(320); avro_record_set(image2, "width", tmp); avro_datum_decref(tmp);
 	tmp = avro_int32(SMALL); avro_record_set(image2, "size", tmp); avro_datum_decref(tmp);
 
 	/* add media & image records to content record. */
@@ -207,23 +207,23 @@ static void check_part_avro(void *obj) {
 
 	check_val(avro_record_get(media, "duration", &tmp) == 0);
 	avro_int64_get(tmp, &i64);
-	check_val(i64 == 1234567);
+	check_val(i64 == 18000000);
 
 	check_val(avro_record_get(media, "size", &tmp) == 0);
 	avro_int64_get(tmp, &i64);
-	check_val(i64 == 123);
+	check_val(i64 == 58982400);
 
 	check_val(avro_record_get(media, "height", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
-	check_val(i32 == 0);
+	check_val(i32 == 480);
 
 	check_val(avro_record_get(media, "width", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
-	check_val(i32 == 0);
+	check_val(i32 == 640);
 
 	check_val(avro_record_get(media, "bitrate", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
-	check_val(i32 == 0);
+	check_val(i32 == 262144);
 
 	check_val(avro_record_get(media, "person", &array) == 0);
 #ifdef HAVE_avro_array_get
@@ -258,7 +258,7 @@ static void check_all_avro(void *obj) {
 	check_val(avro_array_get(array, 0, &image) == 0);
 	check_val(avro_record_get(image, "height", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
-	check_val(i32 == 0);
+	check_val(i32 == 768);
 
 	check_val(avro_record_get(image, "title", &tmp) == 0);
 	avro_string_get(tmp, &p);
@@ -270,7 +270,7 @@ static void check_all_avro(void *obj) {
 
 	check_val(avro_record_get(image, "width", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
-	check_val(i32 == 0);
+	check_val(i32 == 1024);
 
 	check_val(avro_record_get(image, "size", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
@@ -279,7 +279,7 @@ static void check_all_avro(void *obj) {
 	check_val(avro_array_get(array, 1, &image) == 0);
 	check_val(avro_record_get(image, "height", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
-	check_val(i32 == 0);
+	check_val(i32 == 240);
 
 	check_val(avro_record_get(image, "title", &tmp) == 0);
 	avro_string_get(tmp, &p);
@@ -291,7 +291,7 @@ static void check_all_avro(void *obj) {
 
 	check_val(avro_record_get(image, "width", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
-	check_val(i32 == 0);
+	check_val(i32 == 320);
 
 	check_val(avro_record_get(image, "size", &tmp) == 0);
 	avro_int32_get(tmp, &i32);
