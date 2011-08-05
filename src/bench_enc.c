@@ -450,7 +450,7 @@ static void bench_decode_object_check_all(BenchEnc *bench, uint32_t count) {
 	record_bench_stat(BenchDecodeObjectCheckAll, bench, count, total_len);
 }
 
-static void bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
+static void bench_decode_object_check_partial(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
 	char         *buffer = bench->buffer;
@@ -470,7 +470,7 @@ static void bench_decode_object_check_media(BenchEnc *bench, uint32_t count) {
 	btimer_start(timer);
 	for(n = 0; n < count; n++) {
 		obj = info->decode(state, NULL, buffer, len);
-		info->check_media(obj);
+		info->check_partial(obj);
 		info->free(obj);
 	}
 	/* bench finished */
@@ -540,7 +540,7 @@ static int bench_enc_run(BenchEncInfo *info) {
 	for(i = 0; i < TRIALS; i++)
 		bench_decode_object_check_all(bench, LOOP_ENC_DEC);
 	for(i = 0; i < TRIALS; i++)
-		bench_decode_object_check_media(bench, LOOP_ENC_DEC);
+		bench_decode_object_check_partial(bench, LOOP_ENC_DEC);
 
 	for(i = 0; i < TRIALS; i++)
 		bench_decode_encode_round_trip(bench, LOOP_ROUND_TRIP);

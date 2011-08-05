@@ -62,7 +62,7 @@ struct BenchEncInfo {
 	encode_func   encode;
 	decode_func   decode;
 	check_func    check_all;
-	check_func    check_media;
+	check_func    check_partial;
 	init_func     init;
 	cleanup_func  cleanup;
 	const char    *name;
