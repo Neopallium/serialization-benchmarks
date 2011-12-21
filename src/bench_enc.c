@@ -11,24 +11,19 @@
 #include <sys/user.h>
 #include "bench_enc.h"
 
-#define TEST 0
-
 #define MAX_BUFFER_SIZE 128 * 1024
 
 #undef MAX_DOUBLE
 #define MAX_DOUBLE (1.0e30)
 
 static int loop_multipler = 100;
+static int g_trials = 20;
+static bool g_test = false;
 
 #define LOOP_ENC_DEC       (20 * loop_multipler)
 #define LOOP_CREATE_DELETE (20 * loop_multipler)
 #define LOOP_ROUND_TRIP    (20 * loop_multipler)
 #define LOOP_CREATE        (20 * loop_multipler)
-#if TEST
-#define TRIALS 1
-#else
-#define TRIALS 20
-#endif
 
 #include "btimer.h"
 
@@ -78,14 +73,16 @@ static void bench_enc_free(BenchEnc *bench) {
 typedef enum {
 	BenchCreateAndDeleteEmpty   = 0,
 	BenchCreateAndDeleteFull    = 1,
-	BenchEncodeDifferentObjects = 2,
-	BenchEncodeSameObject       = 3,
-	BenchDecodeObject           = 4,
-	BenchDecodeSameObject       = 5,
-	BenchDecodeObjectCheckAll   = 6,
-	BenchDecodeObjectCheckMedia = 7,
-	BenchDecodeEncodeRoundTrip  = 8,
-	BenchStatIdMax              = 9,
+	BenchCreateCheckDeleteFull  = 2,
+	BenchEncodeDifferentObjects = 3,
+	BenchEncodeSizeObject       = 4,
+	BenchEncodeSameObject       = 5,
+	BenchDecodeObject           = 6,
+	BenchDecodeSameObject       = 7,
+	BenchDecodeObjectCheckAll   = 8,
+	BenchDecodeObjectCheckMedia = 9,
+	BenchDecodeEncodeRoundTrip  = 10,
+	BenchStatIdMax              = 11,
 } BenchStatID;
 #define MAX_BENCH_STATS BenchStatIdMax
 
@@ -98,7 +95,9 @@ typedef struct BenchStatInfo {
 static BenchStatInfo bench_enc_stats_info[] = {
 	{ 1, "Create empty",         "create & delete empty object" },
 	{ 1, "Create full",          "create & delete full object" },
+	{ 1, "Create/Check full",    "create, check & delete full object" },
 	{ 0, "Encode diff",          "encode different objects" },
+	{ 0, "Encode size",          "encode size object" },
 	{ 0, "Encode same",          "encode same object" },
 	{ 0, "Decode",               "decode object" },
 	{ 0, "Decode same",          "decode same object" },
@@ -274,10 +273,10 @@ static void record_bench_stat(BenchStatID stat_id, BenchEnc *bench, uint32_t cou
 		info->bytes[stat_id] = bytes;
 		info->counts[stat_id] = count;
 	}
-#if TEST
-	printf("%20s: %6.0f nsecs\n", bench_enc_stats_info[stat_id].name,
-		((double)((secs * NSEC_PER_SEC) / count)));
-#endif
+	if(g_test) {
+		printf("%20s: %6.0f nsecs\n", bench_enc_stats_info[stat_id].name,
+			((double)((secs * NSEC_PER_SEC) / count)));
+	}
 }
 
 static void bench_create_empty_objects(BenchEnc *bench, uint32_t count) {
@@ -314,6 +313,49 @@ static void bench_create_full_objects(BenchEnc *bench, uint32_t count) {
 	record_bench_stat(BenchCreateAndDeleteFull, bench, count, 0);
 }
 
+static void bench_create_full_object_check_all(BenchEnc *bench, uint32_t count) {
+	BTimer       timer = bench->timer;
+	BenchEncInfo *info = bench->info;
+	void         *obj = NULL;
+	uint32_t     n;
+
+	/* start timer. */
+	btimer_start(timer);
+	for(n = 0; n < count; n++) {
+		obj = info->build(NULL);
+		info->check_all(obj);
+		info->free(obj);
+	}
+	/* bench finished */
+	btimer_stop(timer);
+	record_bench_stat(BenchCreateCheckDeleteFull, bench, count, 0);
+}
+
+static void bench_encode_size_object(BenchEnc *bench, uint32_t count) {
+	BTimer       timer = bench->timer;
+	BenchEncInfo *info = bench->info;
+	void         *state = bench->state;
+	void         *obj = NULL;
+	size_t       len = 0;
+	size_t       total_len = 0;
+	uint32_t     n;
+
+	obj = info->build(NULL);
+	/* start timer. */
+	btimer_start(timer);
+	for(n = 0; n < count; n++) {
+		len = info->enc_size(state, obj);
+		total_len += len;
+	}
+	/* bench finished */
+	btimer_stop(timer);
+	/* record encode size. */
+	assert(info->encode_size == 0 || info->encode_size == len);
+	info->encode_size = len;
+	record_bench_stat(BenchEncodeSizeObject, bench, count, total_len);
+	info->free(obj);
+}
+
 static void bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
 	BTimer       timer = bench->timer;
 	BenchEncInfo *info = bench->info;
@@ -336,6 +378,7 @@ static void bench_encode_different_objects(BenchEnc *bench, uint32_t count) {
 	/* bench finished */
 	btimer_stop(timer);
 	/* record encode size. */
+	assert(info->encode_size == 0 || info->encode_size == len);
 	info->encode_size = len;
 	record_bench_stat(BenchEncodeDifferentObjects, bench, count, total_len);
 }
@@ -360,6 +403,8 @@ static void bench_encode_same_object(BenchEnc *bench, uint32_t count) {
 	}
 	/* bench finished */
 	btimer_stop(timer);
+	assert(info->encode_size == 0 || info->encode_size == len);
+	info->encode_size = len;
 	record_bench_stat(BenchEncodeSameObject, bench, count, total_len);
 	info->free(obj);
 }
@@ -523,26 +568,32 @@ static int bench_enc_run(BenchEncInfo *info) {
 	info->check_all(obj);
 	info->free(obj);
 
-	for(i = 0; i < TRIALS; i++)
-		bench_create_empty_objects(bench, LOOP_CREATE_DELETE);
-	for(i = 0; i < TRIALS; i++)
-		bench_create_full_objects(bench, LOOP_CREATE_DELETE);
 
-	for(i = 0; i < TRIALS; i++)
+	for(i = 0; i < g_trials; i++)
+		bench_create_empty_objects(bench, LOOP_CREATE_DELETE);
+	for(i = 0; i < g_trials; i++)
+		bench_create_full_objects(bench, LOOP_CREATE_DELETE);
+	for(i = 0; i < g_trials; i++)
+		bench_create_full_object_check_all(bench, LOOP_CREATE_DELETE);
+
+	for(i = 0; i < g_trials; i++)
+		bench_encode_size_object(bench, LOOP_ENC_DEC);
+
+	for(i = 0; i < g_trials; i++)
 		bench_encode_different_objects(bench, LOOP_ENC_DEC);
-	for(i = 0; i < TRIALS; i++)
+	for(i = 0; i < g_trials; i++)
 		bench_encode_same_object(bench, LOOP_ENC_DEC);
 
-	for(i = 0; i < TRIALS; i++)
+	for(i = 0; i < g_trials; i++)
 		bench_decode_object(bench, LOOP_ENC_DEC);
-	for(i = 0; i < TRIALS; i++)
+	for(i = 0; i < g_trials; i++)
 		bench_decode_same_object(bench, LOOP_ENC_DEC);
-	for(i = 0; i < TRIALS; i++)
+	for(i = 0; i < g_trials; i++)
 		bench_decode_object_check_all(bench, LOOP_ENC_DEC);
-	for(i = 0; i < TRIALS; i++)
+	for(i = 0; i < g_trials; i++)
 		bench_decode_object_check_partial(bench, LOOP_ENC_DEC);
 
-	for(i = 0; i < TRIALS; i++)
+	for(i = 0; i < g_trials; i++)
 		bench_decode_encode_round_trip(bench, LOOP_ROUND_TRIP);
 
 	bench_enc_free(bench);
@@ -550,7 +601,7 @@ static int bench_enc_run(BenchEncInfo *info) {
 }
 
 static void print_usage(char *name) {
-	printf("Usage: %s [-h] [-m <loop multipler>] [--dump] [<msg_name>]\n", name);
+	printf("Usage: %s [-h] [-t] [-m <loop multipler>] [--dump] [<msg_name>]\n", name);
 }
 
 #define unknown_option() do { \
@@ -589,6 +640,10 @@ int main(int argc, char **argv) {
 			default:
 				unknown_option();
 			}
+			break;
+		case 't':
+			g_trials = 10;
+			g_test = true;
 			break;
 		case 'm':
 			arg_offset++;

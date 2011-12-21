@@ -107,6 +107,13 @@ static void cleanup_protobuf(void *state) {
 #endif
 }
 
+static size_t enc_size_protobuf(void *state, void *obj) {
+	SpeedMessage1 *msg1 = (SpeedMessage1 *)obj;
+	(void)state;
+
+	return msg1->ByteSize();
+}
+
 static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) {
 	SpeedMessage1 *msg1 = (SpeedMessage1 *)obj;
 	int len;
@@ -126,9 +133,15 @@ static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) 
 }
 
 static void * decode_protobuf(void *state, void *obj, char *buf, size_t len) {
-	SpeedMessage1 *msg1 = (obj) ? (SpeedMessage1 *)obj : new SpeedMessage1();
+	SpeedMessage1 *msg1;
 	(void)state;
 
+	if(obj) {
+		msg1 = (SpeedMessage1 *)obj;
+		msg1->Clear();
+	} else {
+		msg1 = new SpeedMessage1();
+	}
 	if(!msg1->ParseFromArray(buf, len)) {
 		printf("Decoder failed: \n");
 		free_protobuf(msg1);

@@ -122,6 +122,13 @@ static void cleanup_protobuf(void *state) {
 #endif
 }
 
+static size_t enc_size_protobuf(void *state, void *obj) {
+	MediaContent *content = (MediaContent *)obj;
+	(void)state;
+
+	return content->ByteSize();
+}
+
 static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) {
 	MediaContent *content = (MediaContent *)obj;
 	int len;
@@ -141,10 +148,15 @@ static size_t encode_protobuf(void *state, void *obj, char *buf, size_t buflen) 
 }
 
 static void * decode_protobuf(void *state, void *obj, char *buf, size_t len) {
-	MediaContent *content = (obj) ? (MediaContent *)obj : new MediaContent();
+	MediaContent *content;
 	(void)state;
 
-	content->Clear();
+	if(obj) {
+		content = (MediaContent *)obj;
+		content->Clear();
+	} else {
+		content = new MediaContent();
+	}
 	if(!content->ParseFromArray(buf, len)) {
 		printf("Decoder failed: \n");
 		free_protobuf(content);

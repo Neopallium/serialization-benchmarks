@@ -16,6 +16,7 @@
 		create_ ## bench_name, \
 		build_ ## bench_name, \
 		free_ ## bench_name, \
+		enc_size_ ## bench_name, \
 		encode_ ## bench_name, \
 		decode_ ## bench_name, \
 		check_all_ ## bench_name, \
@@ -51,6 +52,7 @@ typedef void (*check_func)(void *obj);
 typedef void *(*init_func)(char *buf, size_t len);
 typedef void (*cleanup_func)(void *state);
 
+typedef size_t (*enc_size_func)(void *state, void *obj);
 typedef size_t (*encode_func)(void *state, void *obj, char *buf, size_t len);
 typedef void *(*decode_func)(void *state, void *obj, char *buf, size_t len);
 
@@ -59,6 +61,7 @@ struct BenchEncInfo {
 	create_func   create;
 	build_func    build;
 	free_func     free;
+	enc_size_func enc_size;
 	encode_func   encode;
 	decode_func   decode;
 	check_func    check_all;

@@ -342,6 +342,12 @@ static void cleanup_avro(void *state) {
 	free(bstate);
 }
 
+static size_t enc_size_avro(void *state, void *obj) {
+	(void)state;
+	(void)obj;
+	return 0;
+}
+
 static size_t encode_avro(void *state, void *obj, char *buf, size_t len) {
 	AvroBenchState *bstate = (AvroBenchState *)state;
 	avro_datum_t datum = (avro_datum_t)obj;
