@@ -28,7 +28,7 @@ typedef struct BTimer *BTimer;
 
 static inline double get_time_secs() {
   struct timespec tp;
-  if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&tp) != 0) {
+  if(clock_gettime(CLOCK_MONOTONIC,&tp) != 0) {
     perror("clock_gettime");
     return -1.0;
   }
