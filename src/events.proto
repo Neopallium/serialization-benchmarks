@@ -1,0 +1,25 @@
+// This file is from: http://code.google.com/p/thrift-protobuf-compare
+
+package serializers.protobuf;
+
+option java_package = "serializers.protobuf";
+option java_outer_classname = "Events";
+option optimize_for = SPEED;
+
+message IOEvent {
+  required sfixed32 id = 1;
+  required sfixed32 fd = 2;
+  required fixed32 events = 3;
+}
+
+message TimerEvent {
+  required sfixed32 id = 1;
+  required fixed32 remaining = 2;
+  required fixed32 interval = 3;
+}
+
+message SignalEvent {
+  required sfixed32 id = 1;
+  required fixed32 signum = 2;
+}
+

@@ -11,6 +11,8 @@ set(PROTOBUF_SRC
 	media.proto
 	bench_speed1_protobuf.cc
 	speed.proto
+	bench_events_protobuf.cc
+	events.proto
 )
 set(BENCH_SRC
 	bench_enc.c
